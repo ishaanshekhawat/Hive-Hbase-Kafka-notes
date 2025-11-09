@@ -1,0 +1,63 @@
+# Start HBase Shell
+hbase shell
+
+| Purpose              | Command                        |
+| -------------------- | ------------------------------ |
+| Show all namespaces  | `list_namespace`               |
+| Create a namespace   | `create_namespace 'myspace'`   |
+| Describe a namespace | `describe_namespace 'myspace'` |
+| Drop a namespace     | `drop_namespace 'myspace'`     |
+
+
+
+| Purpose          | Command                               |
+| ---------------- | ------------------------------------- |
+| List all tables  | `list`                                |
+| Create a table   | `create 'students', 'info', 'grades'` |
+| Describe a table | `describe 'students'`                 |
+| Disable a table  | `disable 'students'`                  |
+| Enable a table   | `enable 'students'`                   |
+| Drop a table     | `disable 'students'; drop 'students'` |
+
+# Every table needs at least one column family (e.g. 'info', 'grades')
+
+put 'students', '101', 'info:name', 'Alice'
+put 'students', '101', 'info:age', '22'
+put 'students', '101', 'grades:math', '90'
+
+
+get 'students', '101'
+get 'students', '101', 'info:name'
+
+scan 'students'
+scan 'students', {FILTER => "ValueFilter(=, 'binary:Alice')"}
+scan 'students', {STARTROW => 'j', STOPROW => 't'}
+
+delete 'students', '101', 'grades:math'
+deleteall 'students', '101'
+
+alter 'students', 'attendance'
+alter 'students', {NAME => 'grades', METHOD => 'delete'}
+
+| Purpose             | Command                 |
+| ------------------- | ----------------------- |
+| Check table status  | `is_enabled 'students'` |
+| List region servers | `status 'simple'`       |
+| Cluster status      | `status 'detailed'`     |
+| HBase version       | `version`               |
+| Exit shell          | `exit`                  |
+
+| Component        | Role                                    |
+| ---------------- | --------------------------------------- |
+| **HMaster**      | Manages metadata, assigns regions       |
+| **RegionServer** | Stores and serves table data            |
+| **Zookeeper**    | Coordinates communication between nodes |
+| **HFile**        | Actual data storage file in HDFS        |
+
+create 'students', 'info', 'grades'
+put 'students', '101', 'info:name', 'Alice'
+put 'students', '101', 'grades:math', '95'
+scan 'students'
+get 'students', '101'
+disable 'students'
+drop 'students'
