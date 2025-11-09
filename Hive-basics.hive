@@ -1,109 +1,168 @@
--- hive 
--- command to launch hive shell
+-- ---------------------------------------------------------
+-- Hive basics and essential commands
+-- ---------------------------------------------------------
+
+-- Launch Hive shell (classic CLI; may require hive-site.xml)
+-- Command: hive
+-- Recommended newer shell uses HiveServer2:
+-- Command: beeline -u jdbc:hive2://localhost:10000
+
+-- ---------------------------------------------------------
+-- Database operations
+-- ---------------------------------------------------------
 
 -- | Purpose                       | Command                                 |
 -- | ----------------------------- | --------------------------------------- |
--- | Show all databases            | `SHOW DATABASES;`                       |
--- | Create a new database         | `CREATE DATABASE mydb;`                 |
--- | Use a specific database       | `USE mydb;`                             |
--- | Show current database         | `SELECT current_database();`            |
--- | Drop a database               | `DROP DATABASE mydb;`                   |
--- | Drop if exists (force delete) | `DROP DATABASE IF EXISTS mydb CASCADE;` |
+-- | Show all databases            | SHOW DATABASES;                         |
+-- | Create a new database         | CREATE DATABASE mydb;                   |
+-- | Use a specific database       | USE mydb;                               |
+-- | Show current database         | SELECT current_database();              |
+-- | Drop a database               | DROP DATABASE mydb;                     |
+-- | Drop if exists (force delete) | DROP DATABASE IF EXISTS mydb CASCADE;   |
+
+-- ---------------------------------------------------------
+-- Table inspection commands
+-- ---------------------------------------------------------
 
 -- | Purpose                  | Command                         |
 -- | ------------------------ | ------------------------------- |
--- | Show all tables          | `SHOW TABLES;`                  |
--- | Describe table structure | `DESCRIBE tablename;`           |
--- | Describe with details    | `DESCRIBE FORMATTED tablename;` |
+-- | Show all tables          | SHOW TABLES;                    |
+-- | Describe table structure | DESCRIBE tablename;             |
+-- | Describe with details    | DESCRIBE FORMATTED tablename;   |
 
-
+-- ---------------------------------------------------------
+-- Creating internal (managed) tables
+-- ---------------------------------------------------------
 CREATE TABLE employees (
   id INT,
   name STRING,
   salary FLOAT
 )
-ROW FORMAT DELIMITED
-FIELDS TERMINATED BY ','
-STORED AS TEXTFILE;
+ROW FORMAT DELIMITED                  -- Define how the rows are parsed
+FIELDS TERMINATED BY ','              -- CSV format
+STORED AS TEXTFILE;                   -- Storage format for table data
 
-
+-- ---------------------------------------------------------
+-- Creating external tables
+-- External tables do NOT move/delete underlying data
+-- ---------------------------------------------------------
 CREATE EXTERNAL TABLE logs (
   user_id STRING,
   action STRING,
   ts STRING
 )
 ROW FORMAT DELIMITED
-FIELDS TERMINATED BY '\t'
+FIELDS TERMINATED BY '\t'             -- Tab-separated logs
 STORED AS TEXTFILE
-LOCATION '/user/hive/logs/';
+LOCATION '/user/hive/logs/';          -- Points to existing HDFS directory
 
+-- ---------------------------------------------------------
+-- Loading data into tables
+-- LOCAL loads from local filesystem
+-- Without LOCAL loads from HDFS
+-- ---------------------------------------------------------
 
 LOAD DATA LOCAL INPATH '/home/cloudera/employees.csv'
-INTO TABLE employees;
-
+INTO TABLE employees;                 -- Appends new data
 
 LOAD DATA LOCAL INPATH '/home/cloudera/employees.csv'
-OVERWRITE INTO TABLE employees;
+OVERWRITE INTO TABLE employees;       -- Replaces existing table data
 
-
+-- Insert from one table into another
 INSERT INTO TABLE visits
 SELECT * FROM visits_staging;
 
-
+-- Static partition load
 LOAD DATA LOCAL INPATH '/tmp/hr.txt' 
 INTO TABLE employees PARTITION (dept='hr');
 
-
+-- Dynamic partitioning settings (required for dynamic inserts)
 SET hive.exec.dynamic.partition = true;
 SET hive.exec.dynamic.partition.mode = nonstrict;
+
 LOAD DATA INPATH '/user/cloudera/oct_visits.txt' 
-INTO TABLE wh_visits PARTITION (year='2025',month='10');
+INTO TABLE wh_visits PARTITION (year='2025', month='10');
 
-
+-- Insert with dynamic partition columns
 INSERT INTO TABLE wh_visits PARTITION (year, month)
-SELECT name, purpose, year, month from staging_visits;
+SELECT name, purpose, year, month FROM staging_visits;
 
+-- ---------------------------------------------------------
+-- Query examples
+-- ---------------------------------------------------------
 
-SELECT * FROM employees;
-SELECT name, salary FROM employees WHERE salary > 50000;
-SELECT COUNT(*) FROM employees;
-SELECT AVG(salary) FROM employees;
+SELECT * FROM employees;                                      -- Full table read
+SELECT name, salary FROM employees WHERE salary > 50000;      -- Filter
+SELECT COUNT(*) FROM employees;                               -- Aggregation
+SELECT AVG(salary) FROM employees;                            -- Avg salary
 SELECT department, MAX(salary) FROM employees GROUP BY department;
-SELECT * FROM employees distribute by dept;
-SELECT * FROM employees WHERE dept RLIKE '.*SOFT.*\\s+DEV.*';
-SELECT COALESCE(nickname,fname) AS display_name FROM employees;
-SELECT SPLIT('2025-10-30','-') AS date_parts FROM employees;
-SELECT sentences("Hello World. Hive is Powerful.") AS tokenized;
-SELECT explode(ngrams(sentences(line),2,15)) AS x FROM constitution;
-SELECT explode(context_ngrams(sentences(line), array("the", null),20)) AS result FROM constitution;
-SELECT name, dept, salary, RANK() OVER (PARTITION BY dept ORDER BY salary desc) AS dept_rank FROM employees;
-SELECT SUM(sales) OVER (ORDER BY date ROWS BETWEEN UNBOUNDED PRECEDING 2 AND CURRENT ROW);
 
+SELECT * FROM employees DISTRIBUTE BY dept;                   -- Data redistribution by key
+
+-- Regex filter using RLIKE
+SELECT * FROM employees WHERE dept RLIKE '.*SOFT.*\\s+DEV.*';
+
+-- Handle NULLs
+SELECT COALESCE(nickname, fname) AS display_name FROM employees;
+
+-- Split into an array
+SELECT SPLIT('2025-10-30','-') AS date_parts FROM employees;
+
+-- Break text into sentences
+SELECT sentences('Hello World. Hive is Powerful.') AS tokenized;
+
+-- N-grams and text analytics
+SELECT explode(ngrams(sentences(line),2,15)) AS x FROM constitution;
+
+-- Context n-grams
+SELECT explode(context_ngrams(sentences(line), array('the', null),20)) AS result FROM constitution;
+
+-- Window functions
+SELECT name, dept, salary,
+       RANK() OVER (PARTITION BY dept ORDER BY salary DESC) AS dept_rank
+FROM employees;
+
+-- Sliding window sum
+SELECT SUM(sales) OVER (ORDER BY date
+                        ROWS BETWEEN UNBOUNDED PRECEDING AND 2 PRECEDING)
+FROM sales_table;
+
+-- Reduce task setting
 SET mapreduce.job.reduces = 2;
 
-SET hive.enforce.bucketing = true;
+-- ---------------------------------------------------------
+-- Bucketing + partitioning example
+-- ---------------------------------------------------------
+SET hive.enforce.bucketing = true;     -- Required for bucket inserts
+
 CREATE TABLE sales (
   id INT,
   product STRING,
   price FLOAT
 )
-PARTITIONED BY (year INT)
-CLUSTERED BY (product) INTO 4 BUCKETS
+PARTITIONED BY (year INT)              -- Partitions improve pruning
+CLUSTERED BY (product) INTO 4 BUCKETS  -- Bucketing for efficient joins
 ROW FORMAT DELIMITED
 FIELDS TERMINATED BY ','
 STORED AS TEXTFILE;
 
+-- ---------------------------------------------------------
+-- UDF example
+-- ---------------------------------------------------------
+ADD JAR /path/to/udf.jar;              -- Register external UDF JAR
+CREATE TEMPORARY FUNCTION my_upper AS 'com.udf';   -- Temp function for session
 
-ADD JAR /path/to/udf.jar;
-CREATE TEMPORARY FUNCTION my_upper AS 'com.udf';
-
-
+-- ---------------------------------------------------------
+-- View creation
+-- ---------------------------------------------------------
 CREATE VIEW view_name AS
   SELECT col1, col2
   FROM base_table
   WHERE condition = true;
 
-
+-- ---------------------------------------------------------
+-- Skip header lines using table properties
+-- ---------------------------------------------------------
 CREATE TABLE sales (
   id INT,
   product STRING,
@@ -112,13 +171,17 @@ CREATE TABLE sales (
 ROW FORMAT DELIMITED
 FIELDS TERMINATED BY ','
 TBLPROPERTIES (
-  'skip.header.line.count'='3'
+  'skip.header.line.count'='3'         -- Ignore first 3 lines of file
 );
 
+-- ---------------------------------------------------------
+-- Misc Hive shell commands
+-- ---------------------------------------------------------
 
 -- | Purpose                    | Command                           |
 -- | -------------------------- | --------------------------------- |
--- | Show current Hive settings | `SET;`                            |
--- | Change property            | `SET hive.cli.print.header=true;` |
--- | Check version              | `!hive --version;`                |
--- | Exit Hive shell            | `exit;` or `quit;`                |
+-- | Show current Hive settings | SET;                              |
+-- | Change a property          | SET hive.cli.print.header=true;   |
+-- | Check Hive version         | !hive --version;                  |
+-- | Exit Hive shell            | exit; or quit;                    |
+
