@@ -1,0 +1,124 @@
+-- hive 
+-- command to launch hive shell
+
+-- | Purpose                       | Command                                 |
+-- | ----------------------------- | --------------------------------------- |
+-- | Show all databases            | `SHOW DATABASES;`                       |
+-- | Create a new database         | `CREATE DATABASE mydb;`                 |
+-- | Use a specific database       | `USE mydb;`                             |
+-- | Show current database         | `SELECT current_database();`            |
+-- | Drop a database               | `DROP DATABASE mydb;`                   |
+-- | Drop if exists (force delete) | `DROP DATABASE IF EXISTS mydb CASCADE;` |
+
+-- | Purpose                  | Command                         |
+-- | ------------------------ | ------------------------------- |
+-- | Show all tables          | `SHOW TABLES;`                  |
+-- | Describe table structure | `DESCRIBE tablename;`           |
+-- | Describe with details    | `DESCRIBE FORMATTED tablename;` |
+
+
+CREATE TABLE employees (
+  id INT,
+  name STRING,
+  salary FLOAT
+)
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY ','
+STORED AS TEXTFILE;
+
+
+CREATE EXTERNAL TABLE logs (
+  user_id STRING,
+  action STRING,
+  ts STRING
+)
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY '\t'
+STORED AS TEXTFILE
+LOCATION '/user/hive/logs/';
+
+
+LOAD DATA LOCAL INPATH '/home/cloudera/employees.csv'
+INTO TABLE employees;
+
+
+LOAD DATA LOCAL INPATH '/home/cloudera/employees.csv'
+OVERWRITE INTO TABLE employees;
+
+
+INSERT INTO TABLE visits
+SELECT * FROM visits_staging;
+
+
+LOAD DATA LOCAL INPATH '/tmp/hr.txt' 
+INTO TABLE employees PARTITION (dept='hr');
+
+
+SET hive.exec.dynamic.partition = true;
+SET hive.exec.dynamic.partition.mode = nonstrict;
+LOAD DATA INPATH '/user/cloudera/oct_visits.txt' 
+INTO TABLE wh_visits PARTITION (year='2025',month='10');
+
+
+INSERT INTO TABLE wh_visits PARTITION (year, month)
+SELECT name, purpose, year, month from staging_visits;
+
+
+SELECT * FROM employees;
+SELECT name, salary FROM employees WHERE salary > 50000;
+SELECT COUNT(*) FROM employees;
+SELECT AVG(salary) FROM employees;
+SELECT department, MAX(salary) FROM employees GROUP BY department;
+SELECT * FROM employees distribute by dept;
+SELECT * FROM employees WHERE dept RLIKE '.*SOFT.*\\s+DEV.*';
+SELECT COALESCE(nickname,fname) AS display_name FROM employees;
+SELECT SPLIT('2025-10-30','-') AS date_parts FROM employees;
+SELECT sentences("Hello World. Hive is Powerful.") AS tokenized;
+SELECT explode(ngrams(sentences(line),2,15)) AS x FROM constitution;
+SELECT explode(context_ngrams(sentences(line), array("the", null),20)) AS result FROM constitution;
+SELECT name, dept, salary, RANK() OVER (PARTITION BY dept ORDER BY salary desc) AS dept_rank FROM employees;
+SELECT SUM(sales) OVER (ORDER BY date ROWS BETWEEN UNBOUNDED PRECEDING 2 AND CURRENT ROW);
+
+SET mapreduce.job.reduces = 2;
+
+SET hive.enforce.bucketing = true;
+CREATE TABLE sales (
+  id INT,
+  product STRING,
+  price FLOAT
+)
+PARTITIONED BY (year INT)
+CLUSTERED BY (product) INTO 4 BUCKETS
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY ','
+STORED AS TEXTFILE;
+
+
+ADD JAR /path/to/udf.jar;
+CREATE TEMPORARY FUNCTION my_upper AS 'com.udf';
+
+
+CREATE VIEW view_name AS
+  SELECT col1, col2
+  FROM base_table
+  WHERE condition = true;
+
+
+CREATE TABLE sales (
+  id INT,
+  product STRING,
+  amount DOUBLE
+)
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY ','
+TBLPROPERTIES (
+  'skip.header.line.count'='3'
+);
+
+
+-- | Purpose                    | Command                           |
+-- | -------------------------- | --------------------------------- |
+-- | Show current Hive settings | `SET;`                            |
+-- | Change property            | `SET hive.cli.print.header=true;` |
+-- | Check version              | `!hive --version;`                |
+-- | Exit Hive shell            | `exit;` or `quit;`                |
