@@ -1,2 +1,2 @@
 *.hive linguist-detectable=true
-*.hive linguist-language=hive
+*.hive linguist-language=sql
